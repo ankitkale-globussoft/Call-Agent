@@ -1,0 +1,20 @@
+[project]
+name = "call-agent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "asyncpg>=0.31.0",
+    "edge-tts>=7.2.8",
+    "fastapi>=0.136.1",
+    "faster-whisper>=1.2.1",
+    "langchain>=1.2.17",
+    "langchain-ollama>=1.1.0",
+    "numpy>=2.4.4",
+    "pydantic>=2.13.4",
+    "python-dotenv>=1.2.2",
+    "sqlalchemy>=2.0.49",
+    "uvicorn>=0.46.0",
+    "websockets>=16.0",
+]
