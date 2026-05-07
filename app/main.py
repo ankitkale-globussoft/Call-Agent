@@ -6,6 +6,7 @@ from app.transcriber import transcriber
 from app.agent import agent
 from app.synthesizer import synthesizer
 from app.database import log_call
+from app.vad import VADHandler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,43 +25,49 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     logger.info("WebSocket connection established")
     
+    # Initialize VAD handler for this session
+    # 16kHz, 30ms frames, 1s silence threshold
+    vad_handler = VADHandler(sample_rate=16000, frame_duration_ms=30, padding_duration_ms=1000)
+    
     try:
         while True:
-            # Receive audio data from client
-            # In a real-world scenario, you'd handle streaming chunks and VAD
-            # For this prototype, we'll receive a blob of audio (e.g. after user stops talking)
-            data = await websocket.receive_bytes()
+            # Receive binary chunk from client
+            # The client should send raw PCM 16-bit mono 16kHz
+            chunk = await websocket.receive_bytes()
             
-            if not data:
+            if not chunk:
                 continue
 
-            logger.info(f"Received audio data: {len(data)} bytes")
+            # Process chunk through VAD
+            is_final, audio_data = vad_handler.process(chunk)
 
-            # 1. Transcribe (Speech to Text)
-            # Note: transcriber.transcribe expects a WAV/MP3 file buffer
-            user_text = transcriber.transcribe(data)
-            logger.info(f"Transcribed Text: {user_text}")
+            if is_final:
+                logger.info(f"Speech finalized: {len(audio_data)} bytes")
+                
+                # 1. Transcribe
+                user_text = transcriber.transcribe_raw(audio_data)
+                logger.info(f"Transcribed Text: {user_text}")
 
-            if not user_text:
-                await websocket.send_json({"type": "info", "message": "No speech detected"})
-                continue
+                if user_text:
+                    await websocket.send_json({"type": "transcription", "text": user_text})
 
-            await websocket.send_json({"type": "transcription", "text": user_text})
+                    # 2. Agent (LLM)
+                    ai_response = await agent.get_response(user_text)
+                    logger.info(f"AI Response: {ai_response}")
+                    await websocket.send_json({"type": "response", "text": ai_response})
 
-            # 2. Agent (LLM)
-            ai_response = await agent.get_response(user_text)
-            logger.info(f"AI Response: {ai_response}")
-            await websocket.send_json({"type": "response", "text": ai_response})
+                    # 3. Synthesizer (TTS)
+                    audio_response = await synthesizer.text_to_speech(ai_response)
+                    logger.info(f"Generated TTS: {len(audio_response)} bytes")
 
-            # 3. Synthesizer (Text to Speech)
-            audio_response = await synthesizer.text_to_speech(ai_response)
-            logger.info(f"Generated TTS: {len(audio_response)} bytes")
+                    # 4. Send Audio back
+                    await websocket.send_bytes(audio_response)
 
-            # 4. Send Audio back to client
-            await websocket.send_bytes(audio_response)
-
-            # 5. Log to DB (Async)
-            asyncio.create_task(log_call(user_text, ai_response))
+                    # 5. Log to DB
+                    asyncio.create_task(log_call(user_text, ai_response))
+                
+                # Reset VAD for next utterance
+                vad_handler.reset()
 
     except WebSocketDisconnect:
         logger.info("Client disconnected")
