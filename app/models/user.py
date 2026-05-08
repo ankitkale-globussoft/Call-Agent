@@ -1,6 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Table, Text, Date, Time, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Table, Text, Date, Time, DateTime, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from app.db.base import Base
+import enum
+from datetime import datetime
 
 # Association tables for Many-to-Many
 user_roles = Table(
@@ -56,6 +58,7 @@ class Doctor(Base):
     availabilities = relationship("DoctorAvailability", back_populates="doctor", cascade="all, delete-orphan")
     leaves = relationship("DoctorLeave", back_populates="doctor", cascade="all, delete-orphan")
     slots = relationship("AppointmentSlot", back_populates="doctor", cascade="all, delete-orphan")
+    appointments = relationship("Appointment", back_populates="doctor")
 
 class User(Base):
     __tablename__ = "users"
@@ -69,8 +72,7 @@ class User(Base):
     department = relationship("Department", back_populates="users")
     roles = relationship("Role", secondary=user_roles, back_populates="users")
     doctor_profile = relationship("Doctor", back_populates="user", uselist=False)
-
-# --- New Models for Schedule & Availability ---
+    patient_appointments = relationship("Appointment", back_populates="patient")
 
 class DoctorAvailability(Base):
     __tablename__ = "doctor_availabilities"
@@ -80,7 +82,6 @@ class DoctorAvailability(Base):
     start_time = Column(Time, nullable=False)
     end_time = Column(Time, nullable=False)
     slot_duration = Column(Integer, default=30) # in minutes
-    
     doctor = relationship("Doctor", back_populates="availabilities")
 
 class DoctorLeave(Base):
@@ -89,7 +90,6 @@ class DoctorLeave(Base):
     doctor_id = Column(Integer, ForeignKey("doctors.id", ondelete="CASCADE"), nullable=False)
     leave_date = Column(Date, nullable=False)
     reason = Column(String, nullable=True)
-    
     doctor = relationship("Doctor", back_populates="leaves")
 
 class AppointmentSlot(Base):
@@ -99,5 +99,29 @@ class AppointmentSlot(Base):
     start_time = Column(DateTime, nullable=False)
     end_time = Column(DateTime, nullable=False)
     is_booked = Column(Boolean, default=False)
-    
     doctor = relationship("Doctor", back_populates="slots")
+    appointment = relationship("Appointment", back_populates="slot", uselist=False)
+
+# --- New Models for Appointments ---
+
+class AppointmentStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    CONFIRMED = "CONFIRMED"
+    CANCELLED = "CANCELLED"
+    COMPLETED = "COMPLETED"
+
+class Appointment(Base):
+    __tablename__ = "appointments"
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    doctor_id = Column(Integer, ForeignKey("doctors.id", ondelete="CASCADE"), nullable=False)
+    slot_id = Column(Integer, ForeignKey("appointment_slots.id", ondelete="CASCADE"), unique=True, nullable=False)
+    
+    status = Column(SQLEnum(AppointmentStatus), default=AppointmentStatus.PENDING)
+    reason = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    patient = relationship("User", back_populates="patient_appointments")
+    doctor = relationship("Doctor", back_populates="appointments")
+    slot = relationship("AppointmentSlot", back_populates="appointment")

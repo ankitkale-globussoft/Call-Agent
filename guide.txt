@@ -16,3 +16,39 @@ The day_of_week uses standard Python indexing:
 4 = Friday
 5 = Saturday
 6 = Sunday
+
+
+======================================================================================
+Appointment's Booking
+
+Update appointment status :-
+            'PENDING', 'CONFIRMED', 'CANCELLED' or 'COMPLETED'
+
+The /appointments/{id}/status endpoint is the control center for the lifecycle of an appointment. It manages the transition from "just booked" to "finished."
+
+Here is who uses it and why:
+
+1. The Patient (To Cancel)
+Action: CANCELLED
+Why: If a patient realizes they can't make it, they hit this endpoint.
+What happens behind the scenes: The system automatically re-opens the slot. It sets is_booked = False for that time block, allowing another patient to book it immediately.
+2. The Clinic Staff / Admin (To Confirm or Reschedule)
+Action: CONFIRMED or CANCELLED
+Why:
+Confirmation: Some clinics like to manually "Verify" an appointment before it's official.
+Clinic Cancellation: If the doctor suddenly has an emergency, the admin cancels the appointment and notifies the patient.
+3. The Doctor (To Complete)
+Action: COMPLETED
+Why: After the check-up is over, the doctor marks it as COMPLETED.
+Value: This is crucial for:
+Billing: You only bill for completed appointments.
+Medical History: It creates a record that the visit actually happened.
+Analytics: The clinic can see how many patients were actually seen vs. how many "No-shows" occurred.
+🛡️ Built-in Security Logic:
+I have added specific rules to this endpoint so people can't mess with each other's data:
+
+Patients can ONLY change the status to CANCELLED (and only for their own appointments).
+Doctors/Admins can change the status to CONFIRMED or COMPLETED.
+A Patient cannot mark their own appointment as COMPLETED (they can't "fake" a visit).
+This endpoint ensures the "Reality" of the clinic (who showed up, who didn't) matches the "Database."
+
