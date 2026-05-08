@@ -1,0 +1,18 @@
+permissions :- 
+            manage_doctors
+            manage_departments
+            manage_schedule  (for doctors avliblity and schedule)
+
+======================================================================================
+Doctor's Avliblity API
+To set a schedule for a doctor who is only available on specific days, you need to make separate POST requests for each day to /api/v1/schedule/availability.
+
+The day_of_week uses standard Python indexing:
+
+0 = Monday
+1 = Tuesday
+2 = Wednesday
+3 = Thursday
+4 = Friday
+5 = Saturday
+6 = Sunday
