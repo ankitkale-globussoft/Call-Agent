@@ -56,9 +56,26 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     logger.info("WebSocket connection established")
-    
+
     vad_handler = VADHandler(sample_rate=16000, frame_duration_ms=30, padding_duration_ms=1000)
-    
+
+    async def keep_alive():
+        """Send periodic pings to prevent WebSocket timeout during LLM processing."""
+        thinking_phrases = [
+            "Let me check that for you...",
+            "One moment please...",
+            "Working on it...",
+            "Looking that up for you...",
+        ]
+        idx = 0
+        while True:
+            await asyncio.sleep(8)
+            try:
+                await websocket.send_json({"type": "thinking", "text": thinking_phrases[idx % len(thinking_phrases)]})
+                idx += 1
+            except Exception:
+                break
+
     try:
         while True:
             chunk = await websocket.receive_bytes()
@@ -70,11 +87,25 @@ async def websocket_endpoint(websocket: WebSocket):
             if is_final:
                 user_text = transcriber.transcribe_raw(audio_data)
                 if user_text:
+                    # 1. Send transcription immediately
                     await websocket.send_json({"type": "transcription", "text": user_text})
-                    ai_response = await agent.get_response(user_text)
+
+                    # 2. Send immediate "thinking" message so the UI shows activity
+                    await websocket.send_json({"type": "thinking", "text": "Let me check that for you..."})
+
+                    # 3. Start keep-alive pings in background during LLM processing
+                    ping_task = asyncio.create_task(keep_alive())
+
+                    try:
+                        ai_response = await agent.get_response(user_text)
+                    finally:
+                        ping_task.cancel()
+
+                    # 4. Send the final response and audio
                     await websocket.send_json({"type": "response", "text": ai_response})
                     audio_response = await synthesizer.text_to_speech(ai_response)
                     await websocket.send_bytes(audio_response)
+
                 vad_handler.reset()
 
     except WebSocketDisconnect:
