@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Table
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Table, Text
 from sqlalchemy.orm import relationship
 from app.db.base import Base
 
@@ -42,6 +42,21 @@ class Department(Base):
     is_active = Column(Boolean, default=True)
     
     users = relationship("User", back_populates="department")
+    doctors = relationship("Doctor", back_populates="department")
+
+class Doctor(Base):
+    __tablename__ = "doctors"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    department_id = Column(Integer, ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
+    
+    specialization = Column(String, index=True, nullable=False)
+    bio = Column(Text, nullable=True)
+    experience_years = Column(Integer, default=0)
+    consultation_fee = Column(Integer, default=0)
+    
+    user = relationship("User", back_populates="doctor_profile")
+    department = relationship("Department", back_populates="doctors")
 
 class User(Base):
     __tablename__ = "users"
@@ -56,3 +71,6 @@ class User(Base):
     department = relationship("Department", back_populates="users")
     
     roles = relationship("Role", secondary=user_roles, back_populates="users")
+    
+    # 1-to-1 link to Doctor
+    doctor_profile = relationship("Doctor", back_populates="user", uselist=False)
