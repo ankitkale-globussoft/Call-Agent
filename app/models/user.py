@@ -22,6 +22,8 @@ class Permission(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     description = Column(String, nullable=True)
+    
+    roles = relationship("Role", secondary=role_permissions, back_populates="permissions")
 
 class Role(Base):
     __tablename__ = "roles"
@@ -29,7 +31,17 @@ class Role(Base):
     name = Column(String, unique=True, index=True, nullable=False)
     description = Column(String, nullable=True)
     
-    permissions = relationship("Permission", secondary=role_permissions, backref="roles")
+    permissions = relationship("Permission", secondary=role_permissions, back_populates="roles")
+    users = relationship("User", secondary=user_roles, back_populates="roles")
+
+class Department(Base):
+    __tablename__ = "departments"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    description = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    
+    users = relationship("User", back_populates="department")
 
 class User(Base):
     __tablename__ = "users"
@@ -40,4 +52,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
     
-    roles = relationship("Role", secondary=user_roles, backref="users")
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
+    department = relationship("Department", back_populates="users")
+    
+    roles = relationship("Role", secondary=user_roles, back_populates="users")
